@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "citation-kit"
+version = "0.1.0"
+description = "Universal citation grounding layer for LLM agents — placeholder protocol, multi-source registry, streaming renderer, 10 retrieval-API adapters."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "lzq"}]
+keywords = ["llm", "rag", "citation", "grounding", "agent", "research"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# All adapter SDKs are required dependencies — `pip install citation-kit` gets
+# you everything. We made this trade-off deliberately: per-adapter extras add
+# more friction (users have to know what they need) than the ~50 MB combined
+# install pain of the full SDK set.
+dependencies = [
+    "httpx>=0.25",                # exa, brave, openalex, europepmc — direct HTTP
+    "tavily-python>=0.3",         # tavily web search
+    "biopython>=1.83",            # pubmed via Entrez E-utilities
+    "semanticscholar>=0.7",       # semantic scholar graph API
+    "arxiv>=2.1",                 # arxiv API client
+    "habanero>=1.2",              # crossref REST API
+]
+
+[project.optional-dependencies]
+# Postgres backend for cross-process / cross-restart persistence. Most users
+# can use InMemoryStore (default) or JSONFileStore (single-machine durability)
+# without touching this — only opt in if running prod behind asyncpg.
+postgres = ["asyncpg>=0.29"]
+
+# Dev tools (testing, linting). Not needed for runtime.
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+    "mypy>=1.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/lzq/citation-kit"
+Source = "https://github.com/lzq/citation-kit"
+Issues = "https://github.com/lzq/citation-kit/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["citation_kit*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+citation_kit = ["py.typed"]

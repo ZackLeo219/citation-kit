@@ -151,13 +151,68 @@ function returning normalized `CitationRecord` + LLM-facing snippets.
 
 ## LLM prompt template
 
-```
-当你需要引用文献时,**只复制**搜索结果中 `[cite this with]:` 行后的占位符
-(形如 `{{cite:doi:10.x/y}}`),一字符不改。
+The agent's system prompt should make the placeholder protocol explicit.
+Both flavors below carry the same contract — pick whichever language matches
+your model and user base.
 
-**禁止**自己写 URL、标题或参考文献编号 — 系统会自动展开为可点击链接 + 末尾
-参考文献列表。
+### English
+
 ```
+## Citing sources
+
+When you need to cite a fact you got from a search tool, copy the
+placeholder marker from the `[cite this with]:` line of that result
+**verbatim, character-for-character**.
+
+  Example marker:  {{cite:doi:10.1038/s41591-024-12345}}
+  Example sentence: "RTX shows ~78% complete remission {{cite:doi:10.1038/s41591-024-12345}}."
+
+**Do NOT**:
+- Write URLs, titles, authors, or DOI strings yourself
+- Number the citations yourself (no `[1]`, `[2]`, ...)
+- Write a `## References` / `## Bibliography` section yourself
+- Paraphrase, shorten, or "clean up" the marker — even a single character
+  change breaks the binding
+
+The server will automatically:
+- Expand each marker into a numbered `[N]` (or styled chip, depending on
+  configuration)
+- Append a single deduplicated `## References` section at the end of your
+  answer with one line per cited source
+
+If you didn't see a `[cite this with]:` line for a fact, you cannot cite
+it — say so, or call the search tool again to get a citable source.
+```
+
+### 中文
+
+```
+## 引用文献的规则
+
+当你引用一个来自搜索工具的事实时,把工具返回结果里 `[cite this with]:`
+行后面的占位符**一字符不漏地原样复制**到正文中。
+
+  占位符示例:  {{cite:doi:10.1038/s41591-024-12345}}
+  正文示例:    "RTX 完全缓解率约 78%{{cite:doi:10.1038/s41591-024-12345}}。"
+
+**禁止**:
+- 自己写 URL、标题、作者、DOI 字符串
+- 自己给引用编号(不要写 `[1]`、`[2]`……)
+- 自己写 `## 参考文献` / `## References` 段落
+- 改写、缩写、"美化"占位符 —— 改一个字符就会破坏绑定
+
+服务端会**自动**:
+- 把每个占位符展开成 `[N]`(或药丸样式,取决于配置)
+- 在你回答末尾自动追加一段去重后的 `## 参考文献`,每行一条来源
+
+如果某个事实**没有**对应的 `[cite this with]:` 行,你就不能引用它 ——
+说明无来源,或者再调一次搜索工具拿到可引用的来源。
+```
+
+> Both templates assume your tool wrappers emit snippets in the format
+> produced by `citation_kit.adapters.base.build_snippet()` (which always
+> ends with a `[cite this with]: {{cite:...}}` line). If your wrapper uses
+> a different convention, swap the line that says where to look.
 
 ## Validation
 

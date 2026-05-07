@@ -4,6 +4,12 @@ Universal citation grounding layer for LLM agents. Decouples synthesis (LLM)
 from citation bookkeeping (server). Works with any retrieval API and any
 LLM that can preserve a 30-60 char opaque marker character-by-character.
 
+> **v0.2.0** is out (see [CHANGELOG](CHANGELOG.md)) — adds multi-turn
+> conversation support (`rewrite_history_with_placeholders()`),
+> `SQLiteStore` (stdlib, no extras) + `RedisStore`, optimistic locking
+> on all DB backends, and reference integrations for LangGraph /
+> SQLAlchemy / `conversations.metadata`-JSONB.
+
 ## Why
 
 LLMs writing inline citations have two failure modes:
@@ -29,8 +35,10 @@ Server emits:  "RTX shows 78% remission [1] ..." + auto-generated `## References
 ## Install
 
 ```bash
-pip install citation-kit                   # core + 10 retrieval adapters
-pip install "citation-kit[postgres]"       # + PostgresStore for prod persistence
+pip install citation-kit                       # core + 10 retrieval adapters + sqlite/json/memory stores
+pip install "citation-kit[postgres]"           # + asyncpg-backed PostgresStore
+pip install "citation-kit[redis]"              # + RedisStore (sub-ms, distributed)
+pip install "citation-kit[all]"                # + both prod backends
 ```
 
 ## Quickstart (single-tool agent)

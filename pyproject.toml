@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "citation-kit"
-version = "0.1.0"
-description = "Universal citation grounding layer for LLM agents — placeholder protocol, multi-source registry, streaming renderer, 10 retrieval-API adapters."
+version = "0.2.0"
+description = "Universal citation grounding layer for LLM agents — placeholder protocol, multi-source registry, streaming renderer, multi-turn helper, 10 retrieval-API adapters, 5 storage backends."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -36,10 +36,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Postgres backend for cross-process / cross-restart persistence. Most users
-# can use InMemoryStore (default) or JSONFileStore (single-machine durability)
-# without touching this — only opt in if running prod behind asyncpg.
+# Postgres backend for distributed / cross-restart persistence. Most users
+# can use InMemoryStore (default), JSONFileStore (single-machine durability),
+# or SQLiteStore (stdlib, embedded persistence) without touching this — only
+# opt in if running prod behind asyncpg.
 postgres = ["asyncpg>=0.29"]
+
+# Redis backend for distributed low-latency persistence. Use when multiple
+# worker processes share the same registry and Redis is already in your stack.
+redis = ["redis>=5.0"]
+
+# Convenience: install both prod backends in one go.
+all = ["asyncpg>=0.29", "redis>=5.0"]
 
 # Dev tools (testing, linting). Not needed for runtime.
 dev = [
@@ -50,9 +58,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/lzq/citation-kit"
-Source = "https://github.com/lzq/citation-kit"
-Issues = "https://github.com/lzq/citation-kit/issues"
+Homepage = "https://github.com/ZackLeo219/citation-kit"
+Source = "https://github.com/ZackLeo219/citation-kit"
+Issues = "https://github.com/ZackLeo219/citation-kit/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

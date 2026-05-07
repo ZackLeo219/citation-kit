@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from citation_kit.stores import InMemoryStore, JSONFileStore
+from citation_kit.stores import InMemoryStore, JSONFileStore, SQLiteStore
 
 
 class TestInMemoryStore(unittest.IsolatedAsyncioTestCase):
@@ -77,6 +77,66 @@ class TestJSONFileStore(unittest.IsolatedAsyncioTestCase):
         path = self.s._path("X")
         path.write_text("not json{{{", encoding="utf-8")
         self.assertIsNone(await self.s.aload("X"))
+
+
+class TestSQLiteStore(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+        self.tmp.close()
+        self.s = SQLiteStore(self.tmp.name)
+
+    async def asyncTearDown(self):
+        os.unlink(self.tmp.name)
+
+    async def test_save_load(self):
+        await self.s.asave("conv-1", {"records": {"pmid:1": {"title": "P"}}, "turns": []})
+        loaded = await self.s.aload("conv-1")
+        self.assertEqual(loaded["records"]["pmid:1"]["title"], "P")
+
+    async def test_load_missing_returns_none(self):
+        self.assertIsNone(await self.s.aload("nope"))
+
+    async def test_overwrite(self):
+        await self.s.asave("X", {"v": 1})
+        await self.s.asave("X", {"v": 2})
+        self.assertEqual((await self.s.aload("X"))["v"], 2)
+
+    async def test_unicode_scope_and_data(self):
+        await self.s.asave("会话_42", {"中文": "ok", "n": 42})
+        loaded = await self.s.aload("会话_42")
+        self.assertEqual(loaded["中文"], "ok")
+
+    async def test_delete(self):
+        await self.s.asave("X", {"a": 1})
+        await self.s.adelete("X")
+        self.assertIsNone(await self.s.aload("X"))
+        await self.s.adelete("X")  # idempotent
+
+    async def test_optimistic_locking_first_insert(self):
+        # Initial insert: expected_version=0 succeeds
+        ok = await self.s.asave_with_version("X", {"v": 1}, expected_version=0)
+        self.assertTrue(ok)
+        # Second insert with expected=0 must fail (already exists)
+        ok2 = await self.s.asave_with_version("X", {"v": "boom"}, expected_version=0)
+        self.assertFalse(ok2)
+        self.assertEqual((await self.s.aload("X"))["v"], 1)
+
+    async def test_optimistic_locking_cas(self):
+        await self.s.asave("X", {"v": 1})
+        data, ver = await self.s.aload_with_version("X")
+        # Successful CAS with current version
+        ok = await self.s.asave_with_version("X", {"v": 2}, expected_version=ver)
+        self.assertTrue(ok)
+        # Stale CAS with old version fails
+        ok2 = await self.s.asave_with_version("X", {"v": 99}, expected_version=ver)
+        self.assertFalse(ok2)
+        self.assertEqual((await self.s.aload("X"))["v"], 2)
+
+    async def test_in_memory(self):
+        # `:memory:` works for ephemeral testing
+        s = SQLiteStore(":memory:")
+        await s.asave("k", {"v": 1})
+        self.assertEqual((await s.aload("k"))["v"], 1)
 
 
 if __name__ == "__main__":

@@ -72,11 +72,18 @@ class PostgresStore:
                 CREATE TABLE IF NOT EXISTS {self._table} (
                     scope_id    TEXT PRIMARY KEY,
                     data        JSONB NOT NULL,
+                    version     INTEGER NOT NULL DEFAULT 1,
                     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
                 );
                 CREATE INDEX IF NOT EXISTS {self._table}_updated_at_idx
                     ON {self._table} (updated_at);
                 """
+            )
+            # Backwards-compat: deployments created with v0.1 lack `version`.
+            # Idempotent + cheap.
+            await conn.execute(
+                f"ALTER TABLE {self._table} "
+                f"ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1"
             )
         self._created = True
 
@@ -101,13 +108,66 @@ class PostgresStore:
         async with pool.acquire() as conn:
             await conn.execute(
                 f"""
-                INSERT INTO {self._table} (scope_id, data, updated_at)
-                VALUES ($1, $2::jsonb, now())
+                INSERT INTO {self._table} (scope_id, data, version, updated_at)
+                VALUES ($1, $2::jsonb, 1, now())
                 ON CONFLICT (scope_id)
-                DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+                DO UPDATE SET
+                    data = EXCLUDED.data,
+                    version = {self._table}.version + 1,
+                    updated_at = now()
                 """,
                 scope_id, payload,
             )
+
+    # ───────── Optimistic locking ─────────
+
+    async def aload_with_version(
+        self, scope_id: str
+    ) -> tuple[dict[str, Any] | None, int]:
+        """Load data + current version. Use the version on the next
+        ``asave_with_version`` to detect concurrent overwrites."""
+        await self._ensure_table()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"SELECT data, version FROM {self._table} WHERE scope_id = $1",
+                scope_id,
+            )
+        if row is None:
+            return None, 0
+        d = row["data"]
+        if isinstance(d, str):
+            d = json.loads(d)
+        return d, int(row["version"])
+
+    async def asave_with_version(
+        self, scope_id: str, data: dict[str, Any], expected_version: int
+    ) -> bool:
+        """Compare-and-swap save. Returns True on success, False if the
+        on-disk version differs from ``expected_version`` (caller should
+        reload + merge + retry)."""
+        await self._ensure_table()
+        payload = json.dumps(data, ensure_ascii=False)
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            if expected_version == 0:
+                # Insert-if-absent semantics
+                row = await conn.fetchrow(
+                    f"INSERT INTO {self._table} (scope_id, data, version, updated_at) "
+                    f"VALUES ($1, $2::jsonb, 1, now()) "
+                    f"ON CONFLICT (scope_id) DO NOTHING "
+                    f"RETURNING 1",
+                    scope_id, payload,
+                )
+                return row is not None
+            row = await conn.fetchrow(
+                f"UPDATE {self._table} "
+                f"SET data = $2::jsonb, version = version + 1, updated_at = now() "
+                f"WHERE scope_id = $1 AND version = $3 "
+                f"RETURNING 1",
+                scope_id, payload, expected_version,
+            )
+            return row is not None
 
     async def adelete(self, scope_id: str) -> None:
         await self._ensure_table()

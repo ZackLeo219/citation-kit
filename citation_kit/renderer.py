@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import AsyncIterator, Iterator, Literal
 
+from .observability import emit as _emit_metric
 from .registry import CitationRegistry, PLACEHOLDER_RE
 from .types import PLACEHOLDER_OPEN, PLACEHOLDER_CLOSE
 
@@ -222,8 +223,10 @@ class CitationRenderer:
             if cite_id in self.registry:
                 self._seen_set.add(cite_id)
                 self._seen_order.append(cite_id)
+                _emit_metric("citation_kit.placeholder_seen", mode=self.mode)
             else:
                 # Unknown placeholder — leave as visible marker for validator
+                _emit_metric("citation_kit.placeholder_orphan", mode=self.mode)
                 return f"[?{cite_id}?]"
         idx = self._seen_order.index(cite_id) + 1
         return self._format_one(cite_id, idx)

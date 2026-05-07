@@ -113,23 +113,77 @@ final = CitationRenderer(registry, turn_idx=0).render(combined)
 # pmid:111 → [1], pmid:222 → [2]
 ```
 
-## Persistence backends
+## Multi-turn (registry persisted across turns)
+
+Single-turn citation grounding (everything above) works in any agent. But
+real conversations span multiple turns — and there's a subtle trap: after
+turn 1 the user-facing text contains substituted `[N]` markers, and most
+frontends store + POST that rendered text back as conversation history. On
+turn 2 the LLM sees `[N]` markers in history and (often) starts copying
+that pattern instead of writing fresh `{{cite:...}}` placeholders, leaving
+orphan numeric refs and an empty references section.
+
+Fix is two parts:
+
+**1. Persist the registry across turns** (any backend works):
 
 ```python
-from citation_kit import InMemoryStore, JSONFileStore  # built-in
-from citation_kit.stores import PostgresStore           # requires asyncpg
+from citation_kit import CitationRegistry, CitationRenderer
+from citation_kit.stores import SQLiteStore  # or PostgresStore / RedisStore
 
-# Load existing registry on thread reopen:
-data = await store.aload(thread_id)
+store = SQLiteStore("./registry.db")
+
+# At the start of each turn:
+data = await store.aload(conversation_id)
 registry = CitationRegistry.from_serializable(data)
 
-# Save after each turn:
-await store.asave(thread_id, registry.to_serializable())
+# ... run turn ...
+
+# At the end of each turn:
+await store.asave(conversation_id, registry.to_serializable())
 ```
 
-Custom backend: implement the `RegistryStore` protocol (3 async methods).
-Typical for LangGraph users: wrap your checkpointer in a thin adapter so
-no double-write occurs.
+**2. Rewrite history before sending to the LLM** so it sees a consistent
+placeholder protocol throughout — `[N]` markers in past assistant messages
+get reverse-mapped to `{{cite:cite_id}}`:
+
+```python
+from citation_kit import rewrite_history_with_placeholders
+
+# `prior_messages` from the frontend has [N] markers in assistant content.
+# `registry` was loaded from store with all past turn allocations intact.
+history = rewrite_history_with_placeholders(prior_messages, registry)
+
+# Now feed `history` to your LLM. It sees `{{cite:...}}` everywhere
+# (current-turn tool results AND past assistant outputs) and continues
+# writing placeholders.
+```
+
+Without step 2, the LLM still sees mixed `[N]` (history) + `{{cite:...}}`
+(current tool results), and most models will copy whichever pattern is more
+prominent in their context — usually `[N]` from a long history.
+
+## Persistence backends
+
+5 backends ship in the box. Pick by deployment shape — see
+[BACKENDS.md](BACKENDS.md) for the full decision tree:
+
+| Backend | Setup | When |
+|---------|-------|------|
+| `InMemoryStore` | none | testing, one-shot |
+| `JSONFileStore` | mkdir | dev / single-machine |
+| `SQLiteStore` | one path | embedded persistence (stdlib, no extras) |
+| `PostgresStore` | DSN | production, distributed (`pip install citation-kit[postgres]`) |
+| `RedisStore` | URL | production, sub-ms (`pip install citation-kit[redis]`) |
+
+`SQLiteStore` / `PostgresStore` / `RedisStore` also expose
+`aload_with_version` + `asave_with_version` for compare-and-swap (use when
+multiple workers may write the same `scope_id`).
+
+Custom backend: implement the 3-method `RegistryStore` protocol. Reference
+implementations under `citation_kit/integrations/` for LangGraph
+checkpointer state, SQLAlchemy 2.0 async, and the
+`conversations.metadata`-JSONB embedding pattern.
 
 ## Adapters
 

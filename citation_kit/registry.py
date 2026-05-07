@@ -20,6 +20,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .observability import emit as _emit_metric
 from .types import CitationRecord, PLACEHOLDER_OPEN, PLACEHOLDER_CLOSE
 
 
@@ -63,8 +64,10 @@ class CitationRegistry:
         cid = record.cite_id
         if cid in self._records:
             self._records[cid] = self._merge(self._records[cid], record)
+            _emit_metric("citation_kit.dedup_hit", source=record.source_tool or "unknown")
         else:
             self._records[cid] = record
+            _emit_metric("citation_kit.register", source=record.source_tool or "unknown")
         return cid
 
     def register_many(self, records: list[CitationRecord]) -> list[str]:

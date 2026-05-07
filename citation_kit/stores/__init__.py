@@ -1,12 +1,25 @@
 """Persistence backends for `CitationRegistry`.
 
-Pick one based on infra:
-  * `InMemoryStore` — default, single process, no setup
-  * `JSONFileStore` — single-machine durability (dev / personal projects)
-  * `PostgresStore` — production (auto-creates table, uses asyncpg)
+Pick one based on infra (see BACKENDS.md for the full decision guide):
+  * `InMemoryStore`  — default, single process, no setup, volatile
+  * `JSONFileStore`  — single-machine durability (dev / personal projects)
+  * `SQLiteStore`    — single-machine durability + SQL (stdlib, zero extras)
+  * `PostgresStore`  — production, distributed, ACID (extras: `[postgres]`)
+  * `RedisStore`     — production, distributed, low-latency (extras: `[redis]`)
 
-Custom backends: implement the `RegistryStore` protocol — three async methods
-(`aload` / `asave` / `adelete`).
+Optimistic locking
+------------------
+``SQLiteStore`` / ``PostgresStore`` / ``RedisStore`` expose
+``aload_with_version`` + ``asave_with_version`` for compare-and-swap writes.
+Use these in any environment where multiple workers may write the same
+``scope_id`` concurrently (multi-worker uvicorn, autoscaled k8s, Celery
+fanout). The plain ``asave`` is unconditional and last-write-wins.
+
+Custom backends
+---------------
+Implement the `RegistryStore` protocol — three async methods. Reference
+implementations live under ``citation_kit/integrations/`` for popular
+existing storage layers (LangGraph checkpointer, SQLAlchemy session, etc.).
 """
 from __future__ import annotations
 
@@ -35,12 +48,25 @@ class RegistryStore(Protocol):
 
 from .memory import InMemoryStore  # noqa: E402
 from .json_file import JSONFileStore  # noqa: E402
+from .sqlite import SQLiteStore  # noqa: E402  (stdlib, no extras)
 
-# Postgres is optional — only import if asyncpg is installed.
+# Postgres / Redis are optional — only import if their SDK is installed.
 try:
     from .postgres import PostgresStore  # noqa: E402, F401
 except ImportError:
     PostgresStore = None  # type: ignore[assignment,misc]
 
+try:
+    from .redis import RedisStore  # noqa: E402, F401
+except ImportError:
+    RedisStore = None  # type: ignore[assignment,misc]
 
-__all__ = ["RegistryStore", "InMemoryStore", "JSONFileStore", "PostgresStore"]
+
+__all__ = [
+    "RegistryStore",
+    "InMemoryStore",
+    "JSONFileStore",
+    "SQLiteStore",
+    "PostgresStore",
+    "RedisStore",
+]

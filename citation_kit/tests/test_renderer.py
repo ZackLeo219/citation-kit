@@ -92,6 +92,45 @@ class TestStreamingRender(unittest.TestCase):
         self.assertIn("1. ", out)
 
 
+class TestFeedFlush(unittest.TestCase):
+    """Incremental `feed()` / `flush()` API for callers that own their own loop."""
+
+    def test_basic_feed(self):
+        reg = CitationRegistry()
+        reg.register(_rec("pmid:1"))
+        r = CitationRenderer(reg, turn_idx=0, mode="numeric", append_references=False)
+        out = r.feed("Hello {{cite:pmid:1}} world.")
+        out += r.flush()
+        self.assertEqual(out, "Hello [1] world.")
+
+    def test_feed_split_chunks(self):
+        reg = CitationRegistry()
+        reg.register(_rec("pmid:1"))
+        r = CitationRenderer(reg, turn_idx=0, mode="numeric", append_references=False)
+        parts = []
+        for chunk in ["A {{ci", "te:pmid:", "1}} B"]:
+            parts.append(r.feed(chunk))
+        parts.append(r.flush())
+        self.assertEqual("".join(parts), "A [1] B")
+
+    def test_references_section(self):
+        reg = CitationRegistry()
+        reg.register(_rec("pmid:1", title="Paper", url="https://a/b"))
+        r = CitationRenderer(reg, turn_idx=0, mode="numeric", append_references=False)
+        r.feed("Hello {{cite:pmid:1}}")
+        r.flush()
+        refs = r.references_section()
+        self.assertIn("## 参考文献", refs)
+        self.assertIn("1. ", refs)
+
+    def test_empty_refs_section(self):
+        reg = CitationRegistry()
+        r = CitationRenderer(reg, turn_idx=0, mode="numeric")
+        r.feed("nothing here")
+        r.flush()
+        self.assertEqual(r.references_section(), "")
+
+
 class TestAsyncStreaming(unittest.IsolatedAsyncioTestCase):
     async def test_async_basic(self):
         reg = CitationRegistry()

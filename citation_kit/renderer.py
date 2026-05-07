@@ -62,6 +62,51 @@ class CitationRenderer:
             return rendered_body + "\n\n" + self._build_references(ordered, index_map)
         return rendered_body
 
+    # ───────── Incremental feed (for ad-hoc loops) ─────────
+
+    def feed(self, chunk: str) -> str:
+        """Push one chunk through the renderer; return whatever's safe to emit
+        downstream now. Buffers any partial `{{cite:...` that might be
+        completed by the next call to `feed()`. Pair with `flush()` after the
+        last chunk to drain any trailing buffer.
+
+        Use this when you have your own SSE / queue loop and don't want to
+        wrap your existing iterator into `render_stream()`.
+
+        Example::
+
+            r = CitationRenderer(registry, turn_idx, append_references=False)
+            async for delta in llm_stream:
+                emit(r.feed(delta.content))
+            emit(r.flush())                      # drain partial buffer
+            emit(r.references_section())         # if you want a footer
+        """
+        self._buf = getattr(self, "_buf", "") + chunk
+        out, self._buf = self._scan_buffer(self._buf)
+        return out
+
+    def flush(self) -> str:
+        """Drain any partial buffer (called once after the last `feed()`).
+        Also persists the per-turn index allocation so subsequent `render()`
+        calls on the same final text produce the same numbering."""
+        buf = getattr(self, "_buf", "")
+        out = ""
+        if buf:
+            out, _ = self._scan_buffer(buf, flush=True)
+            self._buf = ""
+        # Persist allocation for re-render consistency
+        self.registry.allocate_indices(self.turn_idx, list(self._seen_order))
+        return out
+
+    def references_section(self) -> str:
+        """Return the auto-generated `## 参考文献` block for everything fed so
+        far. Empty string if no placeholders were seen (caller should skip
+        emission). Safe to call any time after `flush()`."""
+        if not self._seen_order:
+            return ""
+        index_map = {cid: i + 1 for i, cid in enumerate(self._seen_order)}
+        return self._build_references(self._seen_order, index_map)
+
     # ───────── Streaming render ─────────
 
     def render_stream(self, chunks: Iterator[str]) -> Iterator[str]:

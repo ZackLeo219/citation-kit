@@ -17,7 +17,7 @@ Quickstart (single-turn)::
     parsed = tavily_adapter.parse(raw)
     registry.register_many(parsed.records)
     return "\\n\\n".join(parsed.snippets)
-    # snippets contain `[cite this with]: {{cite:url:abc12345}}`
+    # snippets contain `cite → {{cite:url:abc12345}}`
 
     # After LLM writes its answer (containing those placeholders):
     final = CitationRenderer(registry, turn_idx=0, mode="numeric").render(llm_text)

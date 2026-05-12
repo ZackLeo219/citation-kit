@@ -9,14 +9,20 @@ from ..types import CitationRecord
 SNIPPET_TEMPLATE = (
     "{title}\n"
     "{snippet}\n"
-    "[cite this with]: {placeholder}\n"
+    "cite → {placeholder}\n"
 )
 
 
 def build_snippet(record: CitationRecord, snippet_text: str = "") -> str:
     """Render an LLM-facing snippet for one record. The trailing
-    `[cite this with]: {{cite:<id>}}` line is the contract the LLM relies on
-    to know which marker to copy verbatim.
+    `cite → {{cite:<id>}}` line is the contract the LLM relies on to know
+    which marker to copy verbatim. The arrow form (no square brackets
+    around `cite`) is deliberate: the earlier `[cite this with]:` label
+    primed instruction-following models — Qwen-class especially — to
+    drift into emitting `[cite:pmid:...]` shorthand themselves. Those
+    single-bracket strings bypass the renderer's `{{...}}` regex
+    entirely, leading to dropped citations and missing references
+    sections downstream.
 
     `snippet_text` defaults to the record's abstract; pass a custom string when
     the search API returns a query-specific excerpt that's more relevant than

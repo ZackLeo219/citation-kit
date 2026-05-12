@@ -13,8 +13,8 @@ To add a new source, model it on `tavily.py`:
     1. Define a `parse(raw_response: dict | str, *, source_tool: str) -> ParseResult`
     2. Each record's `identifiers` should populate as many of {doi, pmid, arxiv,
        s2, url} as the source provides — `pick_cite_id()` will pick the strongest
-    3. Each snippet ends with `[cite this with]: {{cite:<id>}}` so the LLM
-       sees exactly one canonical placeholder per fact
+    3. Each snippet ends with `cite → {{cite:<id>}}` so the LLM sees
+       exactly one canonical placeholder per fact
 """
 from .base import build_snippet, ensure_authors_tuple
 

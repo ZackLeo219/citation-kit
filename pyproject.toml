@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "citation-kit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Universal citation grounding layer for LLM agents — placeholder protocol, multi-source registry, streaming renderer, multi-turn helper, 10 retrieval-API adapters, 5 storage backends."
 readme = "README.md"
 requires-python = ">=3.10"

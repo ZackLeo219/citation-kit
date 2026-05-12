@@ -4,6 +4,52 @@ All notable changes to citation-kit are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; we don't
 yet promise strict semver across minor versions until v1.0.
 
+## [0.3.0] — 2026-05-12
+
+Snippet-template label change to fix a real-world LLM drift mode.
+Behavior-preserving for existing renderer / registry / store APIs;
+breaking only at the prompt-coordination layer (any system prompt that
+mentioned the literal `[cite this with]:` label needs to be updated).
+
+### Changed
+
+- **`SNIPPET_TEMPLATE`** — final line of every emitted snippet now reads
+  `cite → {{cite:<id>}}` (was `[cite this with]: {{cite:<id>}}`).
+
+  Why: instruction-following models (Qwen-class especially, but
+  observed across vendors) saw the `[cite` + single-bracket prefix
+  repeated in every tool result and started emitting `[cite:pmid:...]`
+  shorthand themselves in their own prose — single-bracket strings
+  that bypass the renderer's `{{...}}` regex entirely. Symptom:
+  raw `[cite:pmid:...]` literals in the user-facing answer plus an
+  empty references section. The arrow form removes the bracket prior
+  at the source; the `cite` keyword stays as a semantic anchor; the
+  asymmetric `→ {{...}}` shape unambiguously marks which side is the
+  value to copy.
+
+  Real incident that prompted this: bridge_agent msg 620 (2026-05-12),
+  five `[cite:pmid:...]` shorthand cites in a single reply, none
+  rendered, no references list emitted.
+
+### Migration from v0.2
+
+If your system prompt references the literal `[cite this with]:` label
+(as the README's English/Chinese prompt templates did up through v0.2),
+update those references to `cite →`. The rest of the contract is
+unchanged: copy the `{{cite:<id>}}` placeholder verbatim.
+
+If you don't reference the label by literal text in your prompt — only
+say "copy the `{{cite:...}}` marker" without anchoring on the prefix —
+no changes needed.
+
+For belt-and-suspenders defense against the same drift on other LLMs,
+consider running a streaming pre-pass that rewrites `[cite:<id>]` and
+`{cite:<id>}` shorthand to canonical `{{cite:<id>}}` before feeding the
+LLM stream into `CitationRenderer`. (Reference implementation:
+`bridge_agent/backend/app/agents/research_agent.py::_CitePlaceholderRepairer`.)
+
+---
+
 ## [0.2.0] — 2026-05-07
 
 Multi-turn support, two new storage backends, optimistic locking, and

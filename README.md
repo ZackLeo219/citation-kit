@@ -57,12 +57,12 @@ def search_tool(query: str) -> str:
     parsed = tavily_adapter.parse(raw)
     registry.register_many(parsed.records)
     return "\n\n".join(parsed.snippets)
-    # snippets contain: "Title\nsnippet\n[cite this with]: {{cite:url:abc12345}}"
+    # snippets contain: "Title\nsnippet\ncite → {{cite:url:abc12345}}"
 
 # 2. Run your LLM with `search_tool` exposed; tell it in system prompt:
 #    "When citing a fact, copy the {{cite:...}} marker verbatim from the
-#    `[cite this with]:` line in the search result. DO NOT write URLs or
-#    titles yourself — the server will render them."
+#    `cite →` line in the search result. DO NOT write URLs or titles
+#    yourself — the server will render them."
 llm_output = run_llm(...)
 # llm_output: "RTX is effective {{cite:url:abc12345}}, with 78% remission..."
 
@@ -223,7 +223,7 @@ your model and user base.
 ## Citing sources
 
 When you need to cite a fact you got from a search tool, copy the
-placeholder marker from the `[cite this with]:` line of that result
+placeholder marker from the `cite →` line of that result
 **verbatim, character-for-character**.
 
   Example marker:  {{cite:doi:10.1038/s41591-024-12345}}
@@ -242,8 +242,8 @@ The server will automatically:
 - Append a single deduplicated `## References` section at the end of your
   answer with one line per cited source
 
-If you didn't see a `[cite this with]:` line for a fact, you cannot cite
-it — say so, or call the search tool again to get a citable source.
+If you didn't see a `cite →` line for a fact, you cannot cite it — say
+so, or call the search tool again to get a citable source.
 ```
 
 ### 中文
@@ -251,8 +251,8 @@ it — say so, or call the search tool again to get a citable source.
 ```
 ## 引用文献的规则
 
-当你引用一个来自搜索工具的事实时,把工具返回结果里 `[cite this with]:`
-行后面的占位符**一字符不漏地原样复制**到正文中。
+当你引用一个来自搜索工具的事实时,把工具返回结果里 `cite →`
+行右侧的占位符**一字符不漏地原样复制**到正文中。
 
   占位符示例:  {{cite:doi:10.1038/s41591-024-12345}}
   正文示例:    "RTX 完全缓解率约 78%{{cite:doi:10.1038/s41591-024-12345}}。"
@@ -267,14 +267,14 @@ it — say so, or call the search tool again to get a citable source.
 - 把每个占位符展开成 `[N]`(或药丸样式,取决于配置)
 - 在你回答末尾自动追加一段去重后的 `## 参考文献`,每行一条来源
 
-如果某个事实**没有**对应的 `[cite this with]:` 行,你就不能引用它 ——
+如果某个事实**没有**对应的 `cite →` 行,你就不能引用它 ——
 说明无来源,或者再调一次搜索工具拿到可引用的来源。
 ```
 
 > Both templates assume your tool wrappers emit snippets in the format
 > produced by `citation_kit.adapters.base.build_snippet()` (which always
-> ends with a `[cite this with]: {{cite:...}}` line). If your wrapper uses
-> a different convention, swap the line that says where to look.
+> ends with a `cite → {{cite:...}}` line). If your wrapper uses a
+> different convention, swap the line that says where to look.
 
 ## Validation
 

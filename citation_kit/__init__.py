@@ -77,7 +77,7 @@ from .types import (
 )
 from .validator import ValidationResult, autofix_leaks, validate
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # core types
